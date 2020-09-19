@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Net.Http.Headers;
 using System.Reflection.Metadata;
+using System.Threading.Tasks;
 
 namespace TobyNumbers
 {
@@ -10,7 +11,7 @@ namespace TobyNumbers
         private ulong numerator; //Numerator is always less than denominator
         private ulong denominator; //Of Fraction
 
-        public bool Positive { get => positive; }
+        public bool Positive { get => positive; set => positive = value; }
         public ulong Numerator { get => numerator; set { numerator = value; positive = numerator >= 0; simplify(); } }
         public ulong Denominator { get => denominator; set { denominator = value; simplify(); } }
 
@@ -41,7 +42,7 @@ namespace TobyNumbers
             }
         }
 
-        private Fraction(bool pos,ulong num, ulong denom, bool simp)
+        private Fraction(bool pos,ulong num, ulong denom, bool simp = true)
         {
             this.positive = pos;
             this.numerator = num;
@@ -123,32 +124,11 @@ namespace TobyNumbers
         }
         //End decimal types
 
-        private ulong GCD(ulong a, ulong b)
-        {
-            while(a != 0 && b != 0)
-            {
-                if(a > b)
-                {
-                    a %= b;
-                } else
-                {
-                    b %= a;
-                }
-            }
-
-            return a | b;
-        }
-
-        private ulong LCM(ulong a, ulong b)
-        {
-            return a * b / GCD(a, b);
-        }
-
         private void simplify() //Run after all operations
         {
             bool changeMade = false;
 
-            ulong gcd = GCD(numerator, denominator);
+            ulong gcd = Util.GCD(numerator, denominator);
             if(gcd != 1)
             {
                 numerator /= gcd;
@@ -199,55 +179,98 @@ namespace TobyNumbers
 
         public Fraction Add(Fraction o)
         {
-            if(this.denominator == o.denominator)
+            var checkable = GetSameDenominator(this, o);
+            Fraction f1 = checkable.Item1;
+            Fraction f2 = checkable.Item2;
+            if (f1.Positive && !f2.Positive)
             {
-                return new Fraction(this.numerator + o.numerator, this.denominator);
+                f1.Positive = true; f2.Positive = true;
+                return f1.Subtract(f2);
+            } else if (!f1.Positive && f2.Positive)
+            {
+                f1.Positive = true; f2.Positive = true;
+                return f2.Subtract(f1);
+            } else if (!(f1.Positive || f2.Positive))
+            {
+                return new Fraction(false, f1.Numerator + f2.Numerator, f1.Denominator);
+            } else
+            {
+                return new Fraction(true, f1.Numerator + f2.Numerator, f1.Denominator);
             }
-
-            ulong lcm = LCM(this.denominator, o.denominator);
-            ulong thismult = lcm / this.denominator;
-            ulong thatmult = lcm / o.denominator;
-            return new Fraction(this.numerator * thismult,this.denominator * thismult,false) + new Fraction(o.numerator * thatmult, o.denominator * thatmult, false);
+                
         }
 
         public Fraction Subtract(Fraction o)
         {
-            if (this.denominator == o.denominator)
+            var checkable = GetSameDenominator(this, o);
+            Fraction f1 = checkable.Item1;
+            Fraction f2 = checkable.Item2;
+            if (f1.Positive && f2.Positive)
             {
-                if(o.numerator > this.numerator)
+                if(f2.Numerator > f1.Numerator)
                 {
-                    return new Fraction(false,o.numerator - this.numerator, this.denominator,true);
+                    return new Fraction(false, f2.Numerator - f1.Numerator, f1.Denominator);
+                } else
+                {
+                    return new Fraction(true, f1.Numerator - f2.Numerator, f1.Denominator);
                 }
-                return new Fraction(this.numerator - o.numerator, this.denominator);
             }
-
-            ulong lcm = LCM(this.denominator, o.denominator);
-            ulong thismult = lcm / this.denominator;
-            ulong thatmult = lcm / o.denominator;
-            return new Fraction(this.numerator * thismult, this.denominator * thismult, false) - new Fraction(o.numerator * thatmult, o.denominator * thatmult, false);
+            else if (!f1.Positive && f2.Positive)
+            {
+                f2.Positive = false;
+                return f1.Add(f2);
+            }
+            else if (f1.Positive && !f2.Positive)
+            {
+                f2.Positive = true;
+                return f1.Add(f2);
+            }
+            else
+            {
+                f1.Positive = true; f2.Positive = true;
+                return f2.Subtract(f1);
+            }
         }
 
         public Fraction Multiply(Fraction o)
         {
-            return new Fraction(this.numerator * o.numerator,this.denominator * o.denominator);
+            return new Fraction(!(this.Positive ^ o.Positive),this.numerator * o.numerator,this.denominator * o.denominator);
         }
 
         public Fraction Divide(Fraction o)
         {
-            return new Fraction(this.numerator * o.denominator, this.denominator * o.numerator);
+            return new Fraction(!(this.Positive ^ o.Positive),this.numerator * o.denominator, this.denominator * o.numerator);
         }
 
         public bool GreaterThan(Fraction o)
         {
-            if (this.denominator == o.denominator)
+            if (!this.Positive && o.Positive) { return false; }
+            else if (this.Positive && !o.Positive) { return true; }
+            else if (!this.Positive && !o.Positive)
             {
-                return this.numerator > o.numerator;
+                //-2 > -3, so for -3 and -2; check if 3 > 2
+                var checkable = GetSameDenominator(this, o);
+                return checkable.Item1.Numerator < checkable.Item2.Numerator;
+            }
+            else
+            {
+                var checkable = GetSameDenominator(this, o);
+                return checkable.Item1.Numerator > checkable.Item2.Numerator;
+            }
+            
+        }
+
+        private static (Fraction,Fraction) GetSameDenominator(Fraction f1, Fraction f2)
+        {
+            if (f1.denominator == f2.denominator)
+            {
+                return (f1, f2);
             }
 
-            ulong lcm = LCM(this.denominator, o.denominator);
-            ulong thismult = lcm / this.denominator;
-            ulong thatmult = lcm / o.denominator;
-            return new Fraction(this.numerator * thismult, this.denominator * thismult, false) > new Fraction(o.numerator * thatmult, o.denominator * thatmult, false);
+            ulong lcm = Util.LCM(f1.denominator, f2.denominator);
+            ulong thismult = lcm / f1.denominator;
+            ulong thatmult = lcm / f2.denominator;
+            return GetSameDenominator(new Fraction(f1.positive,f1.numerator * thismult, f1.denominator * thismult, false),new Fraction(f2.positive,f2.numerator * thatmult, f2.denominator * thatmult, false));
         }
 
         private long GetWholeNumber()

@@ -54,6 +54,14 @@ namespace FractionTesting
             Fraction f10 = new Fraction(7.5);
             Assert<int>((int)f10, 7);
             Assert<decimal>(f10, 7.5M);
+
+            Fraction f11 = new Fraction(-0.2);
+            Fraction f12 = new Fraction(0.5);
+            Assert<string>((f11 + f12).ToString(), "3/10");
+            Assert<string>((f11 - f12).ToString(), "-7/10");
+            Assert<string>((f11 * f12).ToString(), "-1/10");
+            Assert<string>((f11 / f12).ToString(), "-2/5");
+
         }
     }
 }
